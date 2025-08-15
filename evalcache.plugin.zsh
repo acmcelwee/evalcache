@@ -5,8 +5,16 @@
 
 # default cache directory
 export ZSH_EVALCACHE_DIR=${ZSH_EVALCACHE_DIR:-"$HOME/.zsh-evalcache"}
+__log_file=/tmp/zsh-evalcache.log
+touch ${__log_file}
+
+# log function for evalcache messages
+function __evalcache_log () {
+  echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "${__log_file}"
+}
 
 function _evalcache () {
+  mkdir -p "$ZSH_EVALCACHE_DIR"
   local cmdHash="nohash" data="$*" name
 
   # use the first non-variable argument as the name
@@ -29,18 +37,35 @@ function _evalcache () {
 
   local cacheFile="$ZSH_EVALCACHE_DIR/init-${name##*/}-${cmdHash}.sh"
 
+  if [ -s "$cacheFile" ]; then
+    # Calculate the time difference and cleanup if needed
+    local now=$(date +%s)
+    if [[ $(stat --version 2>&1 | grep GNU) ]]; then
+      # use the coreutils stat args
+      local file_modification=$(stat --format="%Y" "$cacheFile")
+    else
+      # use the BSD stat args
+      local file_modification=$(stat -f "%m" "$cacheFile")
+    fi
+
+    (( diff = (now - file_modification) / ZSH_CLEANUP_SECONDS ))
+    if [ $diff -gt 1 ]; then
+      echo "evalcache: cache for $* expired, rebuilding it"
+      rm -f "$cacheFile"
+    fi
+  fi
+
   if [ "$ZSH_EVALCACHE_DISABLE" = "true" ]; then
     eval ${(q)@}
   elif [ -s "$cacheFile" ]; then
     source "$cacheFile"
   else
     if type "${name}" > /dev/null; then
-      echo "evalcache: ${name} initialization not cached, caching output of: $*" >&2
-      mkdir -p "$ZSH_EVALCACHE_DIR"
+      __evalcache_log "${name} initialization not cached, caching output of: $*"
       eval ${(q)@} > "$cacheFile"
       source "$cacheFile"
     else
-      echo "evalcache: ERROR: ${name} is not installed or in PATH" >&2
+      echo "_evalcache[ERROR]: ${name} is not installed or in PATH" >&2
     fi
   fi
 }
