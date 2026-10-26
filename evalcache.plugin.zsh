@@ -63,6 +63,7 @@ function _evalcache () {
     if type "${name}" > /dev/null; then
       __evalcache_log "${name} initialization not cached, caching output of: $*"
       eval ${(q)@} > "$cacheFile"
+      zcompile "$cacheFile"
       source "$cacheFile"
     else
       echo "_evalcache[ERROR]: ${name} is not installed or in PATH" >&2
@@ -71,5 +72,5 @@ function _evalcache () {
 }
 
 function _evalcache_clear () {
-  rm -i "$ZSH_EVALCACHE_DIR"/init-*.sh
+  rm -i "$ZSH_EVALCACHE_DIR"/init-*.{sh,zwc}
 }
